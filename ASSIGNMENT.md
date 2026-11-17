@@ -8,9 +8,9 @@ Rate your starting familiarity from **0 (none)** to **3 (comfortable)**. Keep th
 
 | Topic | 0–3 | One thing you already know or need to look up |
 | --- | --- | --- |
-| C++ ownership and move semantics | | |
-| POSIX file descriptors and pipes | | |
-| AI coding agents | | |
+| C++ ownership and move semantics | 1 | I did not know this topic, so I need to look up everything carefully: ownership, RAII, destructors, `std::move` and move assignment. |
+| POSIX file descriptors and pipes | 1 | I did not know this topic, so I need to look up everything carefully: what a file descriptor is, `pipe()`, `close()`, `read()`/`write()` and `errno`. |
+| AI coding agents | 3 | I use AI agents every day, so I know I must review everything the AI does and check it against tests and official documentation. |
 
 Read [README.md](README.md), run the tool checks, configure `clang22-debug`, and run the smoke and functional tests separately. A smoke pass with functional failures is the intended initial state.
 
@@ -38,8 +38,11 @@ Keep a short log of your attempts. Add rows as needed:
 
 | Attempt | Failing test or observed behavior | Help needed? | AI mistake or uncertain claim | Evidence and reason for the correction |
 | --- | --- | --- | --- | --- |
-| 1 | | | | |
-| 2 | | | | |
+| 1 | Starting point (code untouched): the smoke test passes; the `unique_fd` and `pipe` tests fail. | No | — | This is the expected start (README): the library functions were empty `TODO`s. |
+| 2 | Implemented `UniqueFd` and `Pipe::create()`. All tests passed on the first try: on my Mac (3/3, Apple Clang 21) and on Linux (GCC 13 and Clang 18, with memory and descriptor checkers). | Yes: Claude (AI) wrote the code and explained it; I reviewed it. | No mistake found in the AI's code. | `ctest --test-dir build/mac-debug --output-on-failure` on my Mac: 100% tests passed. |
+| 3 | Check that the tests really catch bugs: we broke the code on purpose in 3 known-bad ways (`fd_ > 0` instead of `fd_ != -1`; move assignment that does not close the old descriptor; `reset()` without the `reset(get())` guard), then restored the correct code. | No | Not mistakes: deliberate checks. | Each time one test failed (`DescriptorZeroCanBeReleasedAndClosed`, `MoveAssignmentClosesPreviousAndTransfersNewDescriptor`, `ResetClosesOldDescriptorAndAdoptsNewOne`). The tests check the real descriptor state with `fcntl`, not only `get()`. |
+| 4 | Antigravity (another AI) said the `if(this != &other)` check in move assignment is a required "trap". | No | Overstated claim (the code itself was fine). | We removed the check: all 7 `UniqueFd` tests still pass, because `reset(other.release())` is already safe for self-move. We kept the check as an extra safeguard. |
+| 5 | Antigravity said "`pipe2()` is Linux-only". | No | Outdated claim. Its advice to use `pipe()` was still right. | POSIX.1-2024 includes `pipe2` (https://pubs.opengroup.org/onlinepubs/9799919799.2024edition/functions/pipe.html). On my Mac, `grep -n pipe2 "$(xcrun --show-sdk-path)/usr/include/unistd.h"` found nothing, so macOS does not provide it. `pipe()` works on macOS and on the Ubuntu CI. |
 
 This exercise records what your team observed. It cannot establish that AI replaces domain knowledge without a broader controlled study.
 
